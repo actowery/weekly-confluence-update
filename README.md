@@ -34,7 +34,7 @@ Claude will:
 - Ask you for team member names (paste them in any form — comma-separated, newline-separated, "add X, Y, Z")
 - Resolve each to Atlassian + Slack IDs via MCP lookups
 - Ask you (optionally) for Jira project keys, Slack channels, and email keywords associated with your team's work
-- Save everything to `config/teams/<team-slug>.json` — gitignored, so your roster stays private
+- Save everything to `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json` — outside the skill install dir so upgrades don't wipe your roster
 
 You can re-run init anytime to add/remove members.
 

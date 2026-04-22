@@ -26,8 +26,8 @@ If the invocation is `init <team-name>` (or anything clearly asking to set up / 
 | Action | Scope | When |
 |---|---|---|
 | Call `updateConfluencePage` (publish to live page) | Remote write | Phase 8, ONLY after explicit `approve` |
-| Write `config/teams/<slug>.json` | Local write | Phase 0 init or Phase 1b roster confirm — path announced first |
-| Write `/tmp/weekly-preview-*.html`, `modified.json`, drafts JSON, `.cache/` | Local writes | Phases 4, 6, 7 |
+| Write team roster JSON under `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/` | Local write | Phase 0 init or Phase 1b roster confirm — path announced first |
+| Write `/tmp/weekly-preview-*.html`, `modified.json`, drafts JSON, research cache under `${XDG_CACHE_HOME:-$HOME/.cache}/weekly-confluence-update/` | Local writes | Phases 4, 6, 7 |
 | Read page/issues/messages/email via MCP | Remote reads only | Phases 1, 1b, 4 |
 | Read GitHub PRs via `gh` CLI | Remote reads only | Phase 4 (only if team config has `github.orgs`) |
 | Read Slack PRIVATE channels | Remote reads only | Phase 4, ONLY if `slack_search_mode: "public_and_private"` in team config AND user hasn't downgraded this run |
@@ -36,6 +36,17 @@ If the invocation is `init <team-name>` (or anything clearly asking to set up / 
 | Delete Confluence content, change status macros, reorder page | **Never** | — |
 
 If you see the skill about to do anything outside this table, stop it. That's a bug.
+
+## Config & cache locations
+
+Paths used throughout this skill (override via env vars if needed):
+
+- **Team roster**: `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json`
+- **Research cache**: `${XDG_CACHE_HOME:-$HOME/.cache}/weekly-confluence-update/<pageId>/<YYYY-MM-DD>/`
+
+These paths are user-writable and persist across plugin upgrades. The skill must never write to its own install directory — that location gets wiped on upgrade.
+
+**Legacy locations** (dev/standalone use): the old `config/teams/<slug>.json` relative to the skill directory is still read as a fallback if the XDG location is absent. New rosters write to XDG.
 
 ## Prerequisites
 
@@ -54,17 +65,17 @@ Work through these phases sequentially. Do not skip phases; each one depends on 
 
 Trigger: user says `init <team-name>`, `add <name> to <team>`, `remove <name> from <team>`, "set up my team", or similar intent.
 
-Goal: produce or update `config/teams/<team-slug>.json` without the user ever opening the file.
+Goal: produce or update `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json` without the user ever opening the file.
 
 **Side effects in this phase:**
 - Reads: `atlassianUserInfo`, `lookupJiraAccountId`, `slack_search_users`
-- Writes locally: `config/teams/<team-slug>.json` (announce the exact path before writing)
+- Writes locally: `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json` (announce the exact path before writing; create parent dirs if absent)
 - Writes remotely: none
 
 Procedure:
 
 1. Resolve the active tenant. Call `atlassianUserInfo` once (you'll need it anyway). Extract the tenant hostname from a URL the user gives you, or ask.
-2. Load any existing `config/teams/<slug>.json`. If present, show the current roster to the user:
+2. Load any existing roster file (XDG path first, then legacy `config/teams/<slug>.json`). If present, show the current roster to the user:
    ```
    Current <Team> roster:
      1. Alex Example — alex.example@company.com
@@ -86,10 +97,10 @@ Procedure:
    Each member's GitHub handle?                      (name → handle pairs)
    ```
    For each member with a known GitHub handle, store it as `github_username` on their member record. Team-level config goes under the `github` object and a top-level `slack_search_mode` of `"public"` or `"public_and_private"`.
-7. Write `config/teams/<team-slug>.json` (lowercase, spaces → hyphens) following the schema in `references/data-sources.md`. Preserve any `topic_map` or `page_layout` from the existing file.
+7. Write `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json` (lowercase, spaces → hyphens) following the schema in `references/data-sources.md`. Create parent dirs if absent. Preserve any `topic_map` or `page_layout` from the existing file.
 8. Report a one-line summary:
    ```
-   Saved config/teams/<slug>.json — N members, Jira projects: [...], Slack channels: [...].
+   Saved <XDG path>/teams/<slug>.json — N members, Jira projects: [...], Slack channels: [...].
    You can now run the skill normally with any weekly-report URL.
    ```
 9. If the user didn't ask you to run the weekly update too, stop here. Otherwise continue to Phase 1 with the team they just set up.
@@ -108,9 +119,9 @@ Do not invent team members. Do not populate Jira projects from your own guesses 
 
 ### Phase 1b — Discover or load the team roster
 
-**Side effects:** read-only calls (`getConfluencePage`, `getConfluencePageDescendants`, `slack_search_channels`, `searchJiraIssuesUsingJql`, `lookupJiraAccountId`). May write `config/teams/<team-slug>.json` locally only after user confirms the inferred roster — announce the path first.
+**Side effects:** read-only calls (`getConfluencePage`, `getConfluencePageDescendants`, `slack_search_channels`, `searchJiraIssuesUsingJql`, `lookupJiraAccountId`). May write `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json` locally only after user confirms the inferred roster — announce the path first.
 
-Look for `config/teams/<team-name-lowercase>.json` under the skill directory. If it exists, load it and skip to Phase 2. Otherwise, discover the team:
+Look for `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-name-lowercase>.json`; if absent, fall back to the legacy in-skill path `config/teams/<team-name-lowercase>.json` under the skill directory. If it exists, load it and skip to Phase 2. Otherwise, discover the team:
 
 1. **Parent-space sweep.** Get the parent page with `getConfluencePage` and list its descendants via `getConfluencePageDescendants` (limit to recent pages, typically titled `Weekly Report...`). Read the 3–5 most recent prior weekly pages in ADF.
 2. **Mine prior team blocks.** In each prior page, locate `**<TeamName>**` blocks in the same row as the current page's Highlights-equivalent row. Extract mentions that occur in that block's vicinity (the paragraphs up to the next strong-only heading) and any author attributions.
@@ -125,7 +136,7 @@ Look for `config/teams/<team-name-lowercase>.json` under the skill directory. If
      - ...
    Remove anyone who isn't on your team, or name anyone missing. Reply "confirm" to cache.
    ```
-6. **Cache on confirm.** After approval, write `config/teams/<team-slug>.json` following the schema in `references/data-sources.md`. Do not overwrite an existing cache without prompting.
+6. **Cache on confirm.** After approval, write `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json` following the schema in `references/data-sources.md`. Do not overwrite an existing cache without prompting.
 
 If signals are weak (e.g. new team, no prior pages), ask the user for the roster directly rather than publishing guesses. Don't fabricate team membership.
 
@@ -133,7 +144,7 @@ If signals are weak (e.g. new team, no prior pages), ask the user for the roster
 
 **Side effects:** local script execution only (`scripts/parse_page.py sections`). No network calls, no writes.
 
-Run `scripts/parse_page.py sections <adf-file> --user-id <account_id> --team-config config/teams/<team-slug>.json`. It emits a JSON structural map — see `references/confluence-parsing.md` for the full schema.
+Run `scripts/parse_page.py sections <adf-file> --user-id <account_id> --team-config "${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json"`. It emits a JSON structural map — see `references/confluence-parsing.md` for the full schema.
 
 Output section `kind` values and how to handle each:
 
@@ -157,7 +168,7 @@ If the title has no parseable range, ask the user for start and end dates before
 
 ### Phase 4 — Research the week
 
-**Side effects:** read-only external searches (`searchJiraIssuesUsingJql`, Slack search, `outlook_email_search`, `gh search prs` if configured). Writes a local research cache under `.cache/<pageId>/<YYYY-MM-DD>/` so re-runs skip the API calls. Nothing published anywhere.
+**Side effects:** read-only external searches (`searchJiraIssuesUsingJql`, Slack search, `outlook_email_search`, `gh search prs` if configured). Writes a local research cache under `${XDG_CACHE_HOME:-$HOME/.cache}/weekly-confluence-update/<pageId>/<YYYY-MM-DD>/` so re-runs skip the API calls. Nothing published anywhere.
 
 **Before starting, announce which sources you'll hit and any per-run opt-ins.** Example:
 > Researching Apr 06–10. Sources: Jira (team+label), Slack (public + **private** per team config), Outlook, GitHub (orgs: `puppetlabs`). Reply `public only` to downgrade Slack this run.
@@ -167,9 +178,9 @@ For each section the user owns, gather evidence from the four sources for the da
 - **Jira**: `assignee in (currentUser(), <team account_ids>) AND updated >= "<start>" AND updated <= "<end>"`. For the "Product Releases Completed" row, query `fixVersion released during ("<start>","<end>") AND project in (<team projects>)`. Also run a label-based query to pick up team work assigned outside the team.
 - **Slack**: if `slack_search_mode` is `"public_and_private"` AND the user hasn't downgraded this run, use `slack_search_public_and_private`; otherwise `slack_search_public`. Search `from:@<user>` per team member and search team channels for status keywords (`released`, `merged`, `blocked`, `escalation`, `CVE-`). Always announce which mode is active before querying.
 - **Outlook**: search for sent/received mail in the window with subjects containing topic keywords from the section's prompt and customer names.
-- **GitHub**: run `scripts/search_github.py --team-config config/teams/<slug>.json --start <start> --end <end>` to get merged PRs authored by team members in the configured orgs. Also run with `--state open` for in-flight work. Skip if the team config has no `github.orgs`.
+- **GitHub**: run `scripts/search_github.py --team-config "${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<slug>.json" --start <start> --end <end>` to get merged PRs authored by team members in the configured orgs. Also run with `--state open` for in-flight work. Skip if the team config has no `github.orgs`.
 
-Do these searches in parallel — they're independent and the window is fixed. Cache raw results under `.cache/<pageId>/<YYYY-MM-DD>/` as JSON so re-runs don't re-query.
+Do these searches in parallel — they're independent and the window is fixed. Cache raw results under `${XDG_CACHE_HOME:-$HOME/.cache}/weekly-confluence-update/<pageId>/<YYYY-MM-DD>/` as JSON so re-runs don't re-query.
 
 ### Phase 5 — Draft updates
 
@@ -226,7 +237,7 @@ Tell the user: "Preview opened at `<path>`. Review the yellow-highlighted additi
 
 **Side effects — this is the only phase that mutates anything outside the local workspace:**
 - Calls `updateConfluencePage` on the live Confluence page — this overwrites the current page body with the modified ADF and bumps the version.
-- Deletes the local `.cache/<pageId>/` directory after a successful publish.
+- Deletes the local `${XDG_CACHE_HOME:-$HOME/.cache}/weekly-confluence-update/<pageId>/` directory after a successful publish.
 - Never runs unless the user replies with explicit approval. Surface the target URL before calling.
 
 Only after the user replies with an unambiguous approval (e.g. "approve", "looks good, publish", "ship it"):
@@ -236,7 +247,7 @@ Only after the user replies with an unambiguous approval (e.g. "approve", "looks
    scripts/parse_page.py strip-sentinels modified.json > publish.json
    ```
 2. Call `updateConfluencePage` with the content of `publish.json` as the body. Pass the page's current `version.number + 1` as the new version.
-3. Echo the page URL back to the user and delete the `.cache/` directory.
+3. Echo the page URL back to the user and delete the research cache directory.
 
 Rules:
 - Never publish on implicit cues like "thanks" or "ok".

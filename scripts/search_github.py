@@ -7,7 +7,7 @@ config to discover org(s) and per-member GitHub handles.
 
 Usage:
   search_github.py \
-      --team-config config/teams/<slug>.json \
+      --team-config "${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<slug>.json" \
       --start 2026-04-06 --end 2026-04-10 \
       [--state merged|open|all]    # default merged
       [--dry-run]                  # print gh commands, don't execute
@@ -120,7 +120,7 @@ def main():
 
     if not orgs:
         print("warn: team config has no github.orgs — results will span all of GitHub, "
-              "which is noisy. Add orgs to config/teams/<slug>.json under the 'github' key.",
+              "which is noisy. Add orgs to your team config under the 'github' key.",
               file=sys.stderr)
 
     if not args.dry_run and not have_gh():

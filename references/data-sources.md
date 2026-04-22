@@ -2,7 +2,7 @@
 
 Three systems feed each draft: Jira, Slack, Outlook. Search them in parallel once the date range and the per-section topics are known.
 
-## Team roster cache — `config/teams/<team-slug>.json`
+## Team roster cache — `${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<team-slug>.json`
 
 Per-team file, lowercased team name with spaces replaced by hyphens (`Platform` → `platform.json`, `DevOps Tools` → `devops-tools.json`). This file is **auto-produced by Phase 0 init or Phase 1b discovery**, confirmed by the user, and cached for subsequent runs. It is not meant to be hand-authored — if you're tempted to, re-run init instead.
 
@@ -128,7 +128,7 @@ Added in v0.2.0 as a fourth research source — catches work that shipped as mer
 
 **Invoke from Phase 4** via the helper script:
 ```
-scripts/search_github.py --team-config config/teams/<slug>.json \
+scripts/search_github.py --team-config "${XDG_CONFIG_HOME:-$HOME/.config}/weekly-confluence-update/teams/<slug>.json" \
     --start <YYYY-MM-DD> --end <YYYY-MM-DD> \
     [--state merged|open|all]   # default merged
 ```
@@ -151,7 +151,7 @@ Useful subject patterns to surface: `"[RELEASE]"`, `"Post-mortem"`, `"Escalation
 
 These queries are independent. Fire them in a single batched message.
 
-Cache raw responses under `.cache/<pageId>/<YYYY-MM-DD>/` keyed by `<source>-<queryhash>.json`. On rerun (same page, same week), reuse the cache. The cache is disposable — delete the whole folder after a successful publish.
+Cache raw responses under `${XDG_CACHE_HOME:-$HOME/.cache}/weekly-confluence-update/<pageId>/<YYYY-MM-DD>/` keyed by `<source>-<queryhash>.json`. On rerun (same page, same week), reuse the cache. The cache is disposable — delete the whole folder after a successful publish.
 
 ## Attribution and dedup
 
