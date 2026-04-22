@@ -8,13 +8,16 @@ Designed for engineering managers / team leads filling out a shared weekly roll-
 
 Claude Code (or any client that can load skills) with these MCP servers connected:
 
-| MCP | Used for |
-|---|---|
-| Atlassian (Confluence + Jira) | Fetch/update the page; search Jira for team activity and releases |
-| Slack | Search messages for team signal and resolve user IDs |
-| Outlook / M365 | Search email for the date window |
+| Tool | Used for | Required? |
+|---|---|---|
+| Atlassian MCP (Confluence + Jira) | Fetch/update the page; search Jira for team activity and releases | Yes |
+| Slack MCP | Search public (and optionally private) messages; resolve user IDs | Yes |
+| Outlook / M365 MCP | Search email for the date window | Recommended |
+| `gh` CLI | Search GitHub for merged + in-flight PRs by team members | Optional (needed only if your team config sets `github.orgs`) |
 
-If any are missing, the skill will still run but the research phase will be thinner — it'll tell you which sources it couldn't reach.
+Private Slack search is **off by default**. Enable it per-team by setting `slack_search_mode: "public_and_private"` in your team config (via the init flow), or decline per-run with `public only`.
+
+If any tool is missing, the skill still runs but the research phase is thinner — it'll tell you which sources it couldn't reach.
 
 ## Quick start
 

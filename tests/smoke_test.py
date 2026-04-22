@@ -22,6 +22,7 @@ SKILL_ROOT = HERE.parent
 FIX = HERE / "fixtures"
 PARSE = SKILL_ROOT / "scripts" / "parse_page.py"
 RENDER = SKILL_ROOT / "scripts" / "render_preview.py"
+SEARCH_GH = SKILL_ROOT / "scripts" / "search_github.py"
 
 TEST_USER = "test-user-001-alex-example"
 
@@ -172,12 +173,31 @@ def test_render_preview():
         assert_true("<table" in html, "preview renders the table")
 
 
+def test_search_github_dry_run():
+    print("[search_github.py dry-run]")
+    # The script is a thin wrapper over `gh`; in CI we just verify arg parsing
+    # and the dry-run path (prints the commands it would run). We don't execute
+    # gh itself, so no network and no auth needed.
+
+    # Member with a handle → one dry-run command printed; member without → a warn.
+    r = run(["python3", str(SEARCH_GH),
+            "--team-config", str(FIX / "team-platform.json"),
+            "--start", "2026-06-01", "--end", "2026-06-05",
+            "--dry-run"], check=False)
+    assert_eq(r.returncode, 0, "dry-run exits 0")
+    assert_true(b"DRY-RUN" in r.stderr, "dry-run prints the gh command")
+    # Output is a JSON array (empty in dry-run mode).
+    out = json.loads(r.stdout)
+    assert_eq(out, [], "dry-run emits empty JSON array")
+
+
 def main():
     test_sections_on_empty()
     test_sections_on_filled()
     test_dates()
     test_build_patch_and_strip()
     test_render_preview()
+    test_search_github_dry_run()
     print("\nAll smoke tests passed.")
 
 

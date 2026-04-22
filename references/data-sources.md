@@ -18,6 +18,7 @@ Schema:
       "display_name": "Alex Example",
       "atlassian_account_id": "712020:abcd...",
       "slack_user_id": "U01AB2CD3EF",
+      "github_username": "alexexample",
       "email": "alex.example@company.com",
       "confidence": "confirmed",
       "signals": ["user_confirmed"]
@@ -25,7 +26,12 @@ Schema:
   ],
   "jira_projects": ["PLAT", "API"],
   "slack_channels": ["#platform", "#platform-standup"],
+  "slack_search_mode": "public",
   "email_keywords": ["Platform", "API gateway", "Observability"],
+  "github": {
+    "orgs": ["your-org"],
+    "default_state": "merged"
+  },
   "topic_map": {
     "API gateway migration": {"labels": ["api-gw"], "epic": "PLAT-1234"}
   },
@@ -37,6 +43,11 @@ Schema:
   "cache_source": "user_confirmed"
 }
 ```
+
+- `slack_search_mode`: `"public"` (default) or `"public_and_private"`. See Slack section below for the opt-in semantics.
+- `github.orgs`: organizations the skill should scope PR searches to. Empty means skip GitHub research.
+- `github.default_state`: default PR state filter for `search_github.py` (`merged` for shipped work).
+- `members[].github_username`: per-member GitHub handle. Missing handles are warned about, not fatal.
 
 The `page_layout` block lets teams whose Confluence template uses different row names (e.g. "Blockers" instead of "Challenges", "Shipped" instead of "Product Releases Completed") or a different prompt phrasing ("please share updates on...") override what the parser looks for. If omitted, defaults are used.
 
@@ -85,7 +96,9 @@ Pagination: the MCP returns capped page sizes. If `nextPageToken` is present, pa
 
 ## Slack
 
-Prefer `slack_search_public`. Use `slack_search_public_and_private` only if the user explicitly authorizes private-channel search for this run.
+**Choosing the search tool.** The team config's `slack_search_mode` field selects the default: `"public"` (default — uses `slack_search_public`) or `"public_and_private"` (uses `slack_search_public_and_private`). The skill must announce the active mode at the start of Phase 4 and honor a per-run downgrade (user says `public only`). Never silently upgrade from public to private — the user must have opted in either via config or for this run specifically.
+
+**Why this matters**: Slack's `search_public_and_private` reads message content from channels the user (via their Slack app token) has membership in, including DMs. Many team discussions happen in DMs/private threads and would otherwise be invisible — but this also means the tool can surface content the user may not expect to leak into a draft. The announce-mode rule keeps everyone aware.
 
 ### The user's own messages
 ```
@@ -104,6 +117,29 @@ Then filter client-side for status verbs: `released|shipped|merged|blocked|escal
 (escalat OR incident OR outage OR rollback) after:<YYYY-MM-DD> before:<YYYY-MM-DD>
 ```
 Limit to team channels to avoid org-wide noise.
+
+## GitHub
+
+Added in v0.2.0 as a fourth research source — catches work that shipped as merged PRs without matching Jira activity in the window (common for CI/tooling/fixup work).
+
+**Requirements**: `gh` CLI installed and authenticated with `repo` scope for the team's orgs. The skill does not ship `gh` — users install it themselves.
+
+**Per-team config**: the `github.orgs` list names the organizations the skill should search. Each member needs a `github_username` on their record. If orgs are empty or no members have handles, the script emits a warning and contributes nothing to the draft.
+
+**Invoke from Phase 4** via the helper script:
+```
+scripts/search_github.py --team-config config/teams/<slug>.json \
+    --start <YYYY-MM-DD> --end <YYYY-MM-DD> \
+    [--state merged|open|all]   # default merged
+```
+
+Output is a deduplicated JSON array with one entry per PR: author, display name, repo, number, title, URL, state, merged-at, created-at, labels. Sorted newest first.
+
+Run at least twice per section: once with `--state merged` (shipped work) and once with `--state open` (in-flight). Read both streams when drafting — merged PRs map naturally to topic paragraphs; open PRs may belong under "in flight" clauses or in the Challenges row if stale.
+
+**Attribution**: a PR's author is the clearest "did what" signal on GitHub. Use the handle → display_name mapping from team config to surface human-readable names in drafts (`Brónach merged X`) while keeping the PR URL as citation.
+
+**Scope discipline**: `gh search prs` with `--owner=<org>` keeps results inside the team's GitHub surface. Avoid running without `--owner` — team members often have personal PRs and cross-team contributions that pollute the signal.
 
 ## Outlook
 

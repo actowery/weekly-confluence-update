@@ -7,6 +7,7 @@
       "display_name": "Alex Example",
       "atlassian_account_id": "test-user-001-alex-example",
       "slack_user_id": "U_TEST_ALEX",
+      "github_username": "alex-example",
       "email": "alex@example.test",
       "confidence": "confirmed",
       "signals": [
@@ -20,9 +21,16 @@
   "slack_channels": [
     "#platform"
   ],
+  "slack_search_mode": "public",
   "email_keywords": [
     "Platform"
   ],
+  "github": {
+    "orgs": [
+      "test-org"
+    ],
+    "default_state": "merged"
+  },
   "cached_at": "2026-06-01",
   "cache_source": "test_fixture"
 }

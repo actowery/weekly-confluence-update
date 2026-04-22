@@ -187,12 +187,15 @@ def make_team_config():
         "team_lead_account_id": TEST_USER_ID,
         "members": [
             {"display_name": "Alex Example", "atlassian_account_id": TEST_USER_ID,
-             "slack_user_id": "U_TEST_ALEX", "email": "alex@example.test",
+             "slack_user_id": "U_TEST_ALEX", "github_username": "alex-example",
+             "email": "alex@example.test",
              "confidence": "confirmed", "signals": ["test_fixture"]},
         ],
         "jira_projects": ["PLAT"],
         "slack_channels": ["#platform"],
+        "slack_search_mode": "public",
         "email_keywords": ["Platform"],
+        "github": {"orgs": ["test-org"], "default_state": "merged"},
         "cached_at": "2026-06-01",
         "cache_source": "test_fixture",
     }

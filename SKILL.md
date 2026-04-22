@@ -1,6 +1,6 @@
 ---
 name: weekly-confluence-update
-description: Draft the current user's weekly status update into a Confluence weekly-report page by researching their Jira, Slack, and Outlook activity, then render a local HTML preview and only publish back to Confluence after the user approves. Use this skill whenever the user mentions weekly updates, weekly status reports, weekly reports, a Confluence weekly page, "fill in my weekly," "draft my status," platform/engineering weekly roll-ups, or pastes a Confluence URL that looks like a recurring weekly report — even if they don't explicitly say "skill" or "draft." Also use when a manager asks for help summarizing their team's week from Jira/Slack/email.
+description: Draft the current user's weekly status update into a Confluence weekly-report page by researching their Jira, Slack, Outlook, and GitHub PR activity, then render a local HTML preview and only publish back to Confluence after the user approves. Use this skill whenever the user mentions weekly updates, weekly status reports, weekly reports, a Confluence weekly page, "fill in my weekly," "draft my status," platform/engineering weekly roll-ups, or pastes a Confluence URL that looks like a recurring weekly report — even if they don't explicitly say "skill" or "draft." Also use when a manager asks for help summarizing their team's week from Jira/Slack/email/GitHub.
 ---
 
 # Weekly Confluence Update
@@ -29,6 +29,8 @@ If the invocation is `init <team-name>` (or anything clearly asking to set up / 
 | Write `config/teams/<slug>.json` | Local write | Phase 0 init or Phase 1b roster confirm — path announced first |
 | Write `/tmp/weekly-preview-*.html`, `modified.json`, drafts JSON, `.cache/` | Local writes | Phases 4, 6, 7 |
 | Read page/issues/messages/email via MCP | Remote reads only | Phases 1, 1b, 4 |
+| Read GitHub PRs via `gh` CLI | Remote reads only | Phase 4 (only if team config has `github.orgs`) |
+| Read Slack PRIVATE channels | Remote reads only | Phase 4, ONLY if `slack_search_mode: "public_and_private"` in team config AND user hasn't downgraded this run |
 | Run `open <path>` to launch browser | Local | Phase 7 |
 | Send messages, comment on tickets, post to Slack/email | **Never** | — |
 | Delete Confluence content, change status macros, reorder page | **Never** | — |
@@ -74,13 +76,16 @@ Procedure:
    - `slack_search_users` with the name (returns `user_id`, `email`)
 4. When the Jira lookup returns multiple matches (very common for first names), disambiguate by email match with the Slack result, or by showing the top 3 and asking the user.
 5. For each member, capture `{display_name, atlassian_account_id, slack_user_id, email, confidence: "confirmed", signals: ["user_confirmed"]}`.
-6. If the team is brand-new and `jira_projects` / `slack_channels` / `email_keywords` aren't yet known, ask once, conversationally:
+6. If the team is brand-new and the following aren't yet known, ask once in one batch — all optional, empty answers are fine:
    ```
-   What Jira project keys should I search for <Team>'s work? (comma-separated, e.g. PLAT, API)
-   Any team Slack channels? (e.g. #platform, #platform-standup)
-   Any keywords that identify <Team> work in email subjects? (e.g. API gateway, Platform)
+   Jira project keys for <Team>'s work?              (e.g. PLAT, API)
+   Team Slack channels?                              (e.g. #platform, #platform-standup)
+   Include PRIVATE Slack channels in searches?        (yes / no — default no)
+   Email keywords identifying <Team> work?           (e.g. API gateway, Platform)
+   GitHub org(s) hosting <Team>'s repos?             (e.g. your-org)
+   Each member's GitHub handle?                      (name → handle pairs)
    ```
-   All three are optional; empty answers are fine.
+   For each member with a known GitHub handle, store it as `github_username` on their member record. Team-level config goes under the `github` object and a top-level `slack_search_mode` of `"public"` or `"public_and_private"`.
 7. Write `config/teams/<team-slug>.json` (lowercase, spaces → hyphens) following the schema in `references/data-sources.md`. Preserve any `topic_map` or `page_layout` from the existing file.
 8. Report a one-line summary:
    ```
@@ -152,13 +157,17 @@ If the title has no parseable range, ask the user for start and end dates before
 
 ### Phase 4 — Research the week
 
-**Side effects:** read-only external searches (`searchJiraIssuesUsingJql`, `slack_search_public`, `outlook_email_search`). Writes a local research cache under `.cache/<pageId>/<YYYY-MM-DD>/` so re-runs skip the API calls. Nothing published anywhere.
+**Side effects:** read-only external searches (`searchJiraIssuesUsingJql`, Slack search, `outlook_email_search`, `gh search prs` if configured). Writes a local research cache under `.cache/<pageId>/<YYYY-MM-DD>/` so re-runs skip the API calls. Nothing published anywhere.
 
-For each section the user owns, gather evidence from Jira, Slack, and Outlook for the date range, scoped to the topics requested in that section's prompt (or to the team's work if it's a team-ownership block). Full query patterns live in `references/data-sources.md`. Summary:
+**Before starting, announce which sources you'll hit and any per-run opt-ins.** Example:
+> Researching Apr 06–10. Sources: Jira (team+label), Slack (public + **private** per team config), Outlook, GitHub (orgs: `puppetlabs`). Reply `public only` to downgrade Slack this run.
 
-- **Jira**: `assignee in (currentUser(), <team account_ids>) AND updated >= "<start>" AND updated <= "<end>"`. For the "Product Releases Completed" row, query `fixVersion released during ("<start>","<end>") AND project in (<team projects>)`.
-- **Slack**: search `from:@<user>` in team channels for the window, and search the team channels for status-style keywords (`released`, `merged`, `blocked`, `escalation`, `CVE-`).
+For each section the user owns, gather evidence from the four sources for the date range, scoped to the topics requested in that section's prompt. Full query patterns live in `references/data-sources.md`. Summary:
+
+- **Jira**: `assignee in (currentUser(), <team account_ids>) AND updated >= "<start>" AND updated <= "<end>"`. For the "Product Releases Completed" row, query `fixVersion released during ("<start>","<end>") AND project in (<team projects>)`. Also run a label-based query to pick up team work assigned outside the team.
+- **Slack**: if `slack_search_mode` is `"public_and_private"` AND the user hasn't downgraded this run, use `slack_search_public_and_private`; otherwise `slack_search_public`. Search `from:@<user>` per team member and search team channels for status keywords (`released`, `merged`, `blocked`, `escalation`, `CVE-`). Always announce which mode is active before querying.
 - **Outlook**: search for sent/received mail in the window with subjects containing topic keywords from the section's prompt and customer names.
+- **GitHub**: run `scripts/search_github.py --team-config config/teams/<slug>.json --start <start> --end <end>` to get merged PRs authored by team members in the configured orgs. Also run with `--state open` for in-flight work. Skip if the team config has no `github.orgs`.
 
 Do these searches in parallel — they're independent and the window is fixed. Cache raw results under `.cache/<pageId>/<YYYY-MM-DD>/` as JSON so re-runs don't re-query.
 
