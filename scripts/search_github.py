@@ -39,7 +39,7 @@ import sys
 from pathlib import Path
 
 
-PR_JSON_FIELDS = "number,title,url,repository,author,state,createdAt,mergedAt,closedAt,labels"
+PR_JSON_FIELDS = "number,title,url,repository,author,state,createdAt,closedAt,labels,isDraft"
 
 
 def have_gh():
@@ -77,7 +77,14 @@ def gh_search_prs(handle, orgs, start, end, state, dry_run):
 
 
 def normalize(pr, display_name):
-    """Flatten a gh search prs PR into our output shape."""
+    """Flatten a gh search prs PR into our output shape.
+
+    Note: `gh search prs --json` does not expose `mergedAt` directly. For PRs
+    returned when we queried with `--merged`, the state will be "closed" (gh's
+    search API collapses closed+merged) and `closedAt` is effectively the merge
+    time. Downstream consumers should treat `closed_at` as merged_at when the
+    PR came from a merged-state query.
+    """
     repo = pr.get("repository") or {}
     repo_full = repo.get("nameWithOwner") or repo.get("name") or ""
     author = pr.get("author") or {}
@@ -90,8 +97,8 @@ def normalize(pr, display_name):
         "title": pr.get("title"),
         "url": pr.get("url"),
         "state": pr.get("state"),
+        "is_draft": pr.get("isDraft"),
         "created_at": pr.get("createdAt"),
-        "merged_at": pr.get("mergedAt"),
         "closed_at": pr.get("closedAt"),
         "labels": labels,
     }
@@ -141,8 +148,8 @@ def main():
             seen_urls.add(url)
             results.append(normalize(pr, display_name))
 
-    # Sort newest first by merged_at (falling back to created_at).
-    results.sort(key=lambda r: (r.get("merged_at") or r.get("created_at") or ""), reverse=True)
+    # Sort newest first by closed_at (= merge time for merged PRs) then created_at.
+    results.sort(key=lambda r: (r.get("closed_at") or r.get("created_at") or ""), reverse=True)
     print(json.dumps(results, indent=2))
 
 
