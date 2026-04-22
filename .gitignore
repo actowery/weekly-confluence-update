@@ -1,0 +1,27 @@
+# Per-team roster caches contain real names, emails, Slack IDs — not for sharing.
+# Each user generates their own via the init flow in SKILL.md.
+config/teams/*.json
+!config/teams/example.json
+
+# Local research cache from previous runs.
+.cache/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Secrets
+.env
+.env.*
+!.env.example

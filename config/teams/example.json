@@ -1,0 +1,37 @@
+{
+  "_comment": "This is a template. DO NOT edit by hand — run the init flow from SKILL.md instead. Copy this file only if you want to see the schema; the skill will generate your real <team-slug>.json via init.",
+  "team_name": "Platform",
+  "team_slug": "platform",
+  "team_lead_account_id": "712020:REPLACE_WITH_YOUR_ATLASSIAN_ACCOUNT_ID",
+  "team_lead_slack_id": "U00REPLACE",
+  "members": [
+    {
+      "display_name": "Alex Example",
+      "atlassian_account_id": "712020:REPLACE",
+      "slack_user_id": "U00REPLACE",
+      "email": "alex.example@company.com",
+      "confidence": "confirmed",
+      "signals": ["user_confirmed"]
+    }
+  ],
+  "jira_projects": ["PLAT", "API"],
+  "slack_channels": ["#platform", "#platform-standup"],
+  "email_keywords": ["Platform", "API gateway", "Observability"],
+  "topic_map": {
+    "API gateway migration": {"labels": ["api-gw"], "epic": "PLAT-1234"},
+    "Observability roadmap": {"labels": ["observability"], "epic": null}
+  },
+  "page_layout": {
+    "team_only_row_labels": [
+      "product releases completed",
+      "releases",
+      "challenges",
+      "organization",
+      "hiring",
+      "resignations"
+    ],
+    "prompt_phrase_regex": "provide weekly updates"
+  },
+  "cached_at": "YYYY-MM-DD",
+  "cache_source": "example_template"
+}
