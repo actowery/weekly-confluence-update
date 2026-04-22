@@ -1,5 +1,12 @@
 # weekly-confluence-update
 
+> [!IMPORTANT]
+> **This repo is deprecated.** Active development has moved to [actowery/claude-skills](https://github.com/actowery/claude-skills), which consolidates this skill and its siblings under one roof. The canonical version of this skill now lives at [`skills/weekly-confluence-update/`](https://github.com/actowery/claude-skills/tree/main/skills/weekly-confluence-update) there.
+>
+> This repo remains readable for historical reference. No new releases or bug fixes will land here.
+
+---
+
 A Claude Code skill that drafts your weekly status update into a shared Confluence weekly-report page by researching Jira, Slack, and Outlook for the date range, shows you a local HTML preview of exactly what it plans to add, and only publishes to Confluence after you explicitly approve.
 
 Designed for engineering managers / team leads filling out a shared weekly roll-up where many teams write into the same page.
